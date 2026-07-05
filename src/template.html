@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}}</title>
+<style>
+  /* Anthropic brand palette:
+     dark #141413 · light #faf9f5 · mid gray #b0aea5 · light gray #e8e6dc
+     accents: orange #d97757 · blue #6a9bcc · green #788c5d */
+  :root {
+    color-scheme: light dark;
+    --bg: #faf9f5;
+    --fg: #141413;
+    --muted: #6e6c64;
+    --border: #e8e6dc;
+    --border-strong: #b0aea5;
+    --code-bg: #f0eee6;
+    --accent: #d97757;
+    --alert-note: #6a9bcc;
+    --alert-tip: #788c5d;
+    --alert-important: #d97757;
+    --alert-warning: #ab7a2e;
+    --alert-caution: #b3543f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141413;
+      --fg: #faf9f5;
+      --muted: #b0aea5;
+      --border: #33322e;
+      --border-strong: #55534c;
+      --code-bg: #23221f;
+      --alert-tip: #8fa578;
+      --alert-warning: #c9973f;
+      --alert-caution: #cd7259;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif,
+      "Apple Color Emoji", "Segoe UI Emoji";
+    font-size: 16px;
+    line-height: 1.6;
+  }
+  main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 2.5rem 2rem 6rem;
+    word-wrap: break-word;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    margin-top: 1.6em;
+    margin-bottom: .6em;
+    line-height: 1.3;
+    font-weight: 600;
+  }
+  h1 { font-size: 2em; font-weight: 700; padding-bottom: .3em; border-bottom: 2px solid var(--fg); }
+  h2 { font-size: 1.45em; padding-bottom: .3em; border-bottom: 1px solid var(--border-strong); }
+  h3 { font-size: 1.2em; }
+  h4 { font-size: 1em; }
+  h5 { font-size: .875em; }
+  h6 { font-size: .85em; color: var(--muted); }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  p, ul, ol, dl, table, pre, blockquote { margin-top: 0; margin-bottom: 1em; }
+  ul, ol { padding-left: 2em; }
+  li + li { margin-top: .25em; }
+  li.task-list-item { list-style: none; margin-left: -1.5em; }
+  li.task-list-item input { margin-right: .5em; }
+  dt { font-weight: 600; }
+  dd { margin-left: 1.5em; margin-bottom: .75em; }
+  blockquote { padding: 0 1em; border-left: 3px solid var(--accent); color: var(--muted); }
+  hr { height: 1px; border: 0; background: var(--border-strong); margin: 2em 0; }
+  img, video { max-width: 100%; }
+  table { border-collapse: collapse; display: block; max-width: 100%; overflow-x: auto; }
+  th, td { border: 1px solid var(--border); padding: .4em .9em; }
+  th { font-weight: 600; }
+  thead tr, tbody tr:nth-child(2n) { background: var(--code-bg); }
+  code, kbd, samp {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .875em;
+  }
+  code { background: var(--code-bg); padding: .2em .4em; border-radius: 6px; }
+  pre {
+    background: var(--code-bg);
+    padding: 1em;
+    border-radius: 6px;
+    overflow-x: auto;
+    line-height: 1.45;
+  }
+  pre code, pre code.hljs { background: transparent; padding: 0; font-size: .875em; }
+  kbd {
+    background: var(--code-bg);
+    border: 1px solid var(--border-strong);
+    border-bottom-width: 3px;
+    border-radius: 6px;
+    padding: .1em .4em;
+  }
+  sub, sup { font-size: .75em; }
+  section.footnotes { border-top: 1px solid var(--border); margin-top: 2.5em; font-size: .9em; color: var(--muted); }
+
+  /* GitHub-style alerts (> [!NOTE] etc.) */
+  .markdown-alert { padding: .5em 1em; margin-bottom: 1em; border-left: 3px solid var(--border); }
+  .markdown-alert > :last-child { margin-bottom: 0; }
+  .markdown-alert-title { display: flex; align-items: center; gap: .4em; font-weight: 600; margin-bottom: .3em; }
+  .markdown-alert-title svg { fill: currentColor; }
+  .markdown-alert-note      { border-left-color: var(--alert-note); }
+  .markdown-alert-note      .markdown-alert-title { color: var(--alert-note); }
+  .markdown-alert-tip       { border-left-color: var(--alert-tip); }
+  .markdown-alert-tip       .markdown-alert-title { color: var(--alert-tip); }
+  .markdown-alert-important { border-left-color: var(--alert-important); }
+  .markdown-alert-important .markdown-alert-title { color: var(--alert-important); }
+  .markdown-alert-warning   { border-left-color: var(--alert-warning); }
+  .markdown-alert-warning   .markdown-alert-title { color: var(--alert-warning); }
+  .markdown-alert-caution   { border-left-color: var(--alert-caution); }
+  .markdown-alert-caution   .markdown-alert-title { color: var(--alert-caution); }
+
+  .mermaid { text-align: center; }
+  .mermaid:not([data-processed]) { visibility: hidden; }
+
+  /* display math scrolls horizontally instead of overflowing */
+  mjx-container[display="true"] { overflow-x: auto; overflow-y: hidden; max-width: 100%; }
+</style>
+<link rel="stylesheet" href="/__vendor/hljs-github.css" media="(prefers-color-scheme: light)">
+<link rel="stylesheet" href="/__vendor/hljs-github-dark.css" media="(prefers-color-scheme: dark)">
+</head>
+<body>
+<main>
+{{BODY}}
+</main>
+
+<script>
+  // Convert comrak math spans/codes into MathJax delimiters.
+  document.querySelectorAll('[data-math-style]').forEach(function (el) {
+    var display = el.getAttribute('data-math-style') === 'display';
+    el.replaceWith(display ? '\\[' + el.textContent + '\\]'
+                           : '\\(' + el.textContent + '\\)');
+  });
+
+  // Turn ```mermaid code blocks into mermaid containers.
+  document.querySelectorAll('pre[lang="mermaid"]').forEach(function (pre) {
+    var div = document.createElement('div');
+    div.className = 'mermaid';
+    div.textContent = pre.textContent;
+    pre.replaceWith(div);
+  });
+
+  // MathJax configuration (must precede the MathJax script).
+  window.MathJax = {
+    tex: {
+      inlineMath: [['\\(', '\\)']],
+      displayMath: [['\\[', '\\]']],
+      processEscapes: true,
+      tags: 'ams'
+    },
+    options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script async src="/__vendor/mathjax.js"></script>
+<script src="/__vendor/highlight.js"></script>
+<script src="/__vendor/mermaid.js"></script>
+<script>
+  // Mermaid, themed with the brand palette.
+  if (document.querySelector('.mermaid')) {
+    var dark = matchMedia('(prefers-color-scheme: dark)').matches;
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'base',
+      themeVariables: dark ? {
+        background: '#141413',
+        primaryColor: '#23221f', primaryTextColor: '#faf9f5', primaryBorderColor: '#b0aea5',
+        secondaryColor: '#2e2d29', tertiaryColor: '#1c1b19',
+        lineColor: '#b0aea5', textColor: '#faf9f5',
+        noteBkgColor: '#3a2f26', noteTextColor: '#faf9f5', noteBorderColor: '#d97757',
+        actorBkg: '#23221f', actorBorder: '#b0aea5', actorTextColor: '#faf9f5',
+        signalColor: '#b0aea5', signalTextColor: '#faf9f5',
+        labelBoxBkgColor: '#23221f', labelBoxBorderColor: '#d97757',
+        labelTextColor: '#faf9f5', loopTextColor: '#faf9f5',
+        activationBkgColor: '#d97757',
+        fontFamily: 'system-ui, sans-serif'
+      } : {
+        background: '#faf9f5',
+        primaryColor: '#e8e6dc', primaryTextColor: '#141413', primaryBorderColor: '#b0aea5',
+        secondaryColor: '#f0eee6', tertiaryColor: '#faf9f5',
+        lineColor: '#8a887f', textColor: '#141413',
+        noteBkgColor: '#f3e0d7', noteTextColor: '#141413', noteBorderColor: '#d97757',
+        actorBkg: '#e8e6dc', actorBorder: '#b0aea5', actorTextColor: '#141413',
+        signalColor: '#55534c', signalTextColor: '#141413',
+        labelBoxBkgColor: '#e8e6dc', labelBoxBorderColor: '#d97757',
+        labelTextColor: '#141413', loopTextColor: '#141413',
+        activationBkgColor: '#d97757',
+        fontFamily: 'system-ui, sans-serif'
+      }
+    });
+    mermaid.run().catch(function (e) { console.error('mermaid:', e); });
+  }
+
+  // Syntax highlighting (mermaid blocks were already replaced above).
+  document.querySelectorAll('pre code').forEach(function (el) {
+    hljs.highlightElement(el);
+  });
+
+  // Reload when the file changes on disk.
+  var lastMtime = "{{MTIME}}";
+  setInterval(function () {
+    fetch('/__mtime?path=' + encodeURIComponent("{{DOC_PATH}}"))
+      .then(function (r) { return r.text(); })
+      .then(function (t) { if (t !== lastMtime) location.reload(); })
+      .catch(function () {});
+  }, 1000);
+</script>
+</body>
+</html>
