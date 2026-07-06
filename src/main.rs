@@ -307,7 +307,15 @@ fn absolutize(val: &str, base_dir: &Path) -> String {
     // path, then encode exactly once when building the file:// URL.
     let path_part = path_part.replace("&amp;", "&");
     let decoded = percent_decode_str(&path_part).decode_utf8_lossy();
-    format!("{}{tail}", file_url(&base_dir.join(&*decoded)))
+    // `~/…` is a common habit in notes; expand it to the home directory.
+    let full = match decoded.strip_prefix("~/") {
+        Some(rest) => match env::var_os("HOME") {
+            Some(home) if !home.is_empty() => PathBuf::from(home).join(rest),
+            _ => return val.to_string(), // no $HOME to expand against
+        },
+        None => base_dir.join(&*decoded),
+    };
+    format!("{}{tail}", file_url(&full))
 }
 
 fn render_markdown(src: &str) -> String {
@@ -320,6 +328,11 @@ fn render_markdown(src: &str) -> String {
     src.hash(&mut hasher);
     let key = hasher.finish();
     let (src, math_blocks) = protect_display_math(src, key);
+
+    // Obsidian image embeds (`![[pic.png]]`) are not CommonMark; expand them
+    // into raw <img> tags so vault notes render their figures. Runs after math
+    // protection so `$$` bodies (already token-ized) are never touched.
+    let src = expand_obsidian_embeds(&src);
 
     let options = Options {
         extension: ExtensionOptions {
@@ -364,12 +377,129 @@ fn math_token(key: u64, i: usize) -> String {
     format!("mdreadermath{key:016x}x{i}token")
 }
 
+const IMAGE_EXTS: &[&str] = &["png", "jpg", "jpeg", "gif", "svg", "webp", "bmp", "avif"];
+
+/// Expand Obsidian-style image embeds — `![[pic.png]]`, `![[pic.png|300]]`
+/// (width), `![[pic.png|alt text]]` — into raw <img> tags that comrak passes
+/// through and the URL rewriter then resolves. Only image targets are
+/// converted; note transclusions and plain `[[wikilinks]]` are left alone.
+/// Fenced code blocks and inline code spans are skipped. Indented (4-space)
+/// code blocks are NOT skipped: a line-based pass can't tell them apart from
+/// list-item continuations, where embeds are common in Obsidian — use a
+/// fenced block to show a literal `![[…]]`.
+fn expand_obsidian_embeds(src: &str) -> String {
+    let mut out = String::with_capacity(src.len());
+    let mut fence = FenceTracker::default();
+    for line in src.lines() {
+        if fence.consume(line.trim()) {
+            out.push_str(line);
+        } else {
+            out.push_str(&expand_embeds_in_line(line));
+        }
+        out.push('\n');
+    }
+    out
+}
+
+/// Tracks ``` / ~~~ fenced-code state across a line-by-line pass.
+#[derive(Default)]
+struct FenceTracker(Option<(char, usize)>);
+
+impl FenceTracker {
+    /// Feed a trimmed line; true if it belongs to fenced code (delimiters
+    /// included), meaning the caller should pass it through untouched.
+    fn consume(&mut self, trimmed: &str) -> bool {
+        match self.0 {
+            Some((ch, len)) => {
+                if trimmed.len() >= len && trimmed.chars().all(|c| c == ch) {
+                    self.0 = None;
+                }
+                true
+            }
+            None if trimmed.starts_with("```") || trimmed.starts_with("~~~") => {
+                let ch = trimmed.chars().next().unwrap();
+                self.0 = Some((ch, trimmed.chars().take_while(|c| *c == ch).count()));
+                true
+            }
+            None => false,
+        }
+    }
+}
+
+fn expand_embeds_in_line(line: &str) -> String {
+    let mut out = String::with_capacity(line.len());
+    let mut rest = line;
+    while !rest.is_empty() {
+        // Copy inline code spans verbatim (`…`, ``…``, …).
+        if rest.starts_with('`') {
+            let run: String = rest.chars().take_while(|c| *c == '`').collect();
+            if let Some(close) = rest[run.len()..].find(&run) {
+                let end = run.len() + close + run.len();
+                out.push_str(&rest[..end]);
+                rest = &rest[end..];
+                continue;
+            }
+        }
+        if let Some(inner) = rest.strip_prefix("![[") {
+            if let Some(end) = inner.find("]]") {
+                if let Some(tag) = embed_img_tag(&inner[..end]) {
+                    out.push_str(&tag);
+                    rest = &inner[end + 2..];
+                    continue;
+                }
+            }
+        }
+        let ch = rest.chars().next().unwrap();
+        out.push(ch);
+        rest = &rest[ch.len_utf8()..];
+    }
+    out
+}
+
+/// `Fig1.png` / `Fig1.png|300` / `Fig1.png|640x480` / `Fig1.png|alt` → <img>.
+/// Returns None for non-image targets so they stay untouched. The tag is
+/// wrapped in <span> so a stand-alone embed line reads as inline HTML instead
+/// of opening a CommonMark HTML block, which would swallow the markdown
+/// formatting of the lines that follow it.
+fn embed_img_tag(inner: &str) -> Option<String> {
+    let (target, param) = match inner.split_once('|') {
+        Some((t, p)) => (t.trim(), Some(p.trim())),
+        None => (inner.trim(), None),
+    };
+    // Obsidian forbids `[ ] # ^ |` in embed targets, so a bracket means we
+    // matched across malformed input; `<`, `>`, `"` in a name would leak
+    // through the escape/undo asymmetry downstream. Leave all these literal.
+    if target.contains(['[', ']', '<', '>', '"']) {
+        return None;
+    }
+    let ext = Path::new(target).extension()?.to_ascii_lowercase();
+    if !IMAGE_EXTS.contains(&ext.to_str()?) {
+        return None;
+    }
+
+    let src = html_escape(target);
+    let is_num = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+    let img = match param {
+        Some(p) if is_num(p) => format!("<img src=\"{src}\" width=\"{p}\">"),
+        Some(p)
+            if p.split_once('x')
+                .is_some_and(|(w, h)| is_num(w) && is_num(h)) =>
+        {
+            let (w, h) = p.split_once('x').unwrap();
+            format!("<img src=\"{src}\" width=\"{w}\" height=\"{h}\">")
+        }
+        Some(p) => format!("<img src=\"{src}\" alt=\"{}\">", html_escape(p)),
+        None => format!("<img src=\"{src}\" alt=\"\">"),
+    };
+    Some(format!("<span>{img}</span>"))
+}
+
 /// Replace multi-line `$$ … $$` blocks (outside code fences) with opaque
 /// placeholder tokens, returning the rewritten source and the captured TeX.
 fn protect_display_math(src: &str, key: u64) -> (String, Vec<String>) {
     let mut out = String::with_capacity(src.len());
     let mut blocks = Vec::new();
-    let mut fence: Option<(char, usize)> = None;
+    let mut fence = FenceTracker::default();
     let mut lines = src.lines();
 
     while let Some(line) = lines.next() {
@@ -378,14 +508,7 @@ fn protect_display_math(src: &str, key: u64) -> (String, Vec<String>) {
         // 4+ columns of indentation makes an indented code block, not math.
         let indent_cols: usize = indent.chars().map(|c| if c == '\t' { 4 } else { 1 }).sum();
 
-        if let Some((ch, len)) = fence {
-            if trimmed.len() >= len && trimmed.chars().all(|c| c == ch) {
-                fence = None;
-            }
-        } else if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
-            let ch = trimmed.chars().next().unwrap();
-            fence = Some((ch, trimmed.chars().take_while(|c| *c == ch).count()));
-        } else if trimmed == "$$" && indent_cols < 4 {
+        if !fence.consume(trimmed) && trimmed == "$$" && indent_cols < 4 {
             let mut body = String::new();
             let mut closed = false;
             for l in lines.by_ref() {
