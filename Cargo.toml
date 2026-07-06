@@ -3,10 +3,10 @@ name = "md-reader"
 version = "0.1.0"
 edition = "2021"
 description = "A Markdown reader that renders LaTeX/MathJax, Mermaid, syntax highlighting and full GFM"
+license = "MIT"
 
 [dependencies]
 comrak = { version = "0.41", features = ["shortcodes"] }
-tiny_http = "0.12"
 percent-encoding = "2"
 open = "5"
 

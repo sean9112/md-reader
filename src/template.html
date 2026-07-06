@@ -69,8 +69,8 @@
   p, ul, ol, dl, table, pre, blockquote { margin-top: 0; margin-bottom: 1em; }
   ul, ol { padding-left: 2em; }
   li + li { margin-top: .25em; }
-  li.task-list-item { list-style: none; margin-left: -1.5em; }
-  li.task-list-item input { margin-right: .5em; }
+  li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.5em; }
+  li:has(> input[type="checkbox"]) input { margin-right: .5em; }
   dt { font-weight: 600; }
   dd { margin-left: 1.5em; margin-bottom: .75em; }
   blockquote { padding: 0 1em; border-left: 3px solid var(--accent); color: var(--muted); }
@@ -106,8 +106,7 @@
   /* GitHub-style alerts (> [!NOTE] etc.) */
   .markdown-alert { padding: .5em 1em; margin-bottom: 1em; border-left: 3px solid var(--border); }
   .markdown-alert > :last-child { margin-bottom: 0; }
-  .markdown-alert-title { display: flex; align-items: center; gap: .4em; font-weight: 600; margin-bottom: .3em; }
-  .markdown-alert-title svg { fill: currentColor; }
+  .markdown-alert-title { font-weight: 600; margin-bottom: .3em; }
   .markdown-alert-note      { border-left-color: var(--alert-note); }
   .markdown-alert-note      .markdown-alert-title { color: var(--alert-note); }
   .markdown-alert-tip       { border-left-color: var(--alert-tip); }
@@ -119,14 +118,11 @@
   .markdown-alert-caution   { border-left-color: var(--alert-caution); }
   .markdown-alert-caution   .markdown-alert-title { color: var(--alert-caution); }
 
-  .mermaid { text-align: center; }
-  .mermaid:not([data-processed]) { visibility: hidden; }
-
   /* display math scrolls horizontally instead of overflowing */
   mjx-container[display="true"] { overflow-x: auto; overflow-y: hidden; max-width: 100%; }
 </style>
-<link rel="stylesheet" href="/__vendor/hljs-github.css" media="(prefers-color-scheme: light)">
-<link rel="stylesheet" href="/__vendor/hljs-github-dark.css" media="(prefers-color-scheme: dark)">
+{{HLJS_CSS}}
+{{MERMAID_CSS}}
 </head>
 <body>
 <main>
@@ -141,14 +137,6 @@
                            : '\\(' + el.textContent + '\\)');
   });
 
-  // Turn ```mermaid code blocks into mermaid containers.
-  document.querySelectorAll('pre[lang="mermaid"]').forEach(function (pre) {
-    var div = document.createElement('div');
-    div.className = 'mermaid';
-    div.textContent = pre.textContent;
-    pre.replaceWith(div);
-  });
-
   // MathJax configuration (must precede the MathJax script).
   window.MathJax = {
     tex: {
@@ -157,16 +145,24 @@
       processEscapes: true,
       tags: 'ams'
     },
-    options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] },
     svg: { fontCache: 'global' }
   };
 </script>
-<script async src="/__vendor/mathjax.js"></script>
-<script src="/__vendor/highlight.js"></script>
-<script src="/__vendor/mermaid.js"></script>
+{{MATHJAX}}
+{{HIGHLIGHT}}
+{{MERMAID}}
 <script>
-  // Mermaid, themed with the brand palette.
-  if (document.querySelector('.mermaid')) {
+  // Turn ```mermaid code blocks into mermaid containers — only when mermaid
+  // is inlined, so without it they stay visible as plain code blocks.
+  if (window.mermaid) {
+    document.querySelectorAll('pre[lang="mermaid"]').forEach(function (pre) {
+      var div = document.createElement('div');
+      div.className = 'mermaid';
+      div.textContent = pre.textContent;
+      pre.replaceWith(div);
+    });
+
+    // Mermaid, themed with the brand palette.
     var dark = matchMedia('(prefers-color-scheme: dark)').matches;
     mermaid.initialize({
       startOnLoad: false,
@@ -200,19 +196,16 @@
     mermaid.run().catch(function (e) { console.error('mermaid:', e); });
   }
 
-  // Syntax highlighting (mermaid blocks were already replaced above).
-  document.querySelectorAll('pre code').forEach(function (el) {
-    hljs.highlightElement(el);
-  });
-
-  // Reload when the file changes on disk.
-  var lastMtime = "{{MTIME}}";
-  setInterval(function () {
-    fetch('/__mtime?path=' + encodeURIComponent("{{DOC_PATH}}"))
-      .then(function (r) { return r.text(); })
-      .then(function (t) { if (t !== lastMtime) location.reload(); })
-      .catch(function () {});
-  }, 1000);
+  // Syntax highlighting (mermaid blocks were already replaced above). The
+  // fence language sits on <pre lang=…>; copy it to the class hljs reads so
+  // known languages skip auto-detection.
+  if (window.hljs) {
+    document.querySelectorAll('pre code').forEach(function (el) {
+      var lang = el.parentElement.getAttribute('lang');
+      if (lang) el.classList.add('language-' + lang);
+      hljs.highlightElement(el);
+    });
+  }
 </script>
 </body>
 </html>

@@ -1,19 +1,31 @@
 # md-reader
 
 用 Rust 寫的 Markdown 閱讀器。以 [comrak](https://github.com/kivikakk/comrak) 解析
-Markdown，內建本地 HTTP 伺服器，在瀏覽器中渲染 LaTeX 數學（MathJax）、Mermaid
-圖表、程式碼語法高亮，以及完整的 GFM 語法。檔案存檔後頁面自動重新載入。
+Markdown，把文件渲染成**單一自包含的 HTML 檔**（所有樣式與腳本都內嵌），再用
+`file://` 在瀏覽器打開——**不開伺服器、不佔用連接埠、沒有背景程序**。在瀏覽器中
+渲染 LaTeX 數學（MathJax）、Mermaid 圖表、程式碼語法高亮，以及完整的 GFM 語法。
 
 ## 安裝與使用
 
 ```sh
 cargo build --release
-./target/release/md-reader sample.md          # 開啟檔案（自動打開瀏覽器）
-./target/release/md-reader ~/notes            # 開啟目錄（找 README.md / index.md）
-./target/release/md-reader doc.md -p 9000 --no-open
+./target/release/md-reader sample.md              # 渲染後自動打開瀏覽器
+./target/release/md-reader ~/notes                # 開啟目錄（找 README.md / index.md）
+./target/release/md-reader doc.md -o out.html     # 輸出到指定 HTML 檔
+./target/release/md-reader doc.md --no-open       # 只印出產生的 HTML 路徑
 ```
 
 也可以 `cargo install --path .` 之後直接用 `md-reader <檔案>`。
+
+### 在 Finder 中用它開啟 .md
+
+```sh
+./install-macos.sh            # 建立 md-reader.app 並安裝到 ~/Applications
+./install-macos.sh --default  # 再設成所有 .md 的預設開啟程式
+```
+
+之後在 Finder 對 `.md` 按右鍵 ▸ 開啟檔案的應用程式 ▸ md-reader 即可。因為程式
+渲染完就結束、沒有常駐程序，關掉瀏覽器分頁不會留下任何東西。
 
 ## 支援的語法
 
@@ -31,12 +43,13 @@ cargo build --release
 
 - Rust 端：comrak 把 Markdown 轉成 HTML；多行 `$$…$$` 區塊會先被抽出保護，
   避免內容被 Markdown 語法（`\\`、`=`、`_` 等）破壞，渲染後再塞回。
-- 伺服器只綁 `127.0.0.1`，並擋下跳脫文件目錄的路徑（path traversal）。
-- 文件目錄下的圖片、影片等相對路徑資源會直接供應；連到其他 `.md` 檔的
-  相對連結也會被渲染成頁面。
-- 瀏覽器每秒輪詢 `/__mtime`，檔案變更就自動重新載入。
-- MathJax（tex-svg-full）、Mermaid、highlight.js 直接打包在 binary 裡
-  （`vendor/`，經由 `/__vendor/*` 供應），**完全離線可用**，不需要任何網路連線。
+- 產物是放在系統暫存目錄下的一個 HTML 檔（檔名依來源路徑決定，重開同一檔會覆蓋）。
+- 文件目錄下的圖片、影片等相對路徑資源，會在渲染時改寫成絕對的 `file://` 連結，
+  所以即使頁面位於暫存目錄也能正確載入。（連到其他 `.md` 檔的相對連結會直接
+  以原始碼開啟，不會再渲染——這是無伺服器模式的取捨。）
+- MathJax（tex-svg-full）、Mermaid、highlight.js 直接打包在 binary 裡（`vendor/`），
+  並**只在文件真的用到時才內嵌**：純文字筆記只有約 8 KB，有程式碼約 140 KB，
+  用到數學/圖表才會變大。全程 **完全離線可用**，不需要任何網路連線。
 - 配色採用 Anthropic 品牌規範：奶油白 `#faf9f5` / 墨黑 `#141413` 底色、
   橘 `#d97757` 藍 `#6a9bcc` 綠 `#788c5d` 強調色，深淺色模式都套用，
   Mermaid 圖表也用同一套配色；字型一律使用系統預設（`system-ui`）。

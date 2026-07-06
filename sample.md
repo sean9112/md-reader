@@ -48,26 +48,24 @@ $$
 
 ```mermaid
 graph TD
-    A[開始] --> B{檔案是 .md?}
-    B -- 是 --> C[comrak 渲染成 HTML]
-    B -- 否 --> D[直接以靜態檔案回應]
-    C --> E[瀏覽器載入 MathJax / Mermaid / highlight.js]
-    E --> F[顯示]
-    D --> F
+    A[開始] --> B[comrak 渲染成 HTML]
+    B --> C{用到數學 / 圖表 / 程式碼?}
+    C -- 是 --> D[內嵌 MathJax / Mermaid / highlight.js]
+    C -- 否 --> E[維持輕量]
+    D --> F[寫入暫存 HTML 檔]
+    E --> F
+    F --> G[以 file:// 開啟瀏覽器]
 ```
 
 ```mermaid
 sequenceDiagram
     participant U as 使用者
-    participant S as md-reader
+    participant R as md-reader
     participant B as 瀏覽器
-    U->>S: md-reader sample.md
-    S->>B: 開啟 http://127.0.0.1:8787/
-    loop 每秒
-        B->>S: GET /__mtime
-        S-->>B: 檔案修改時間
-    end
-    Note over B: 檔案變更就自動重新載入
+    U->>R: md-reader sample.md
+    R->>R: 渲染 + 內嵌所需資源
+    R->>B: 開啟 file://…/sample.html
+    Note over R: 程式隨即結束，不留任何背景程序
 ```
 
 ## 程式碼高亮
@@ -110,13 +108,13 @@ def fib(n: int) -> int:
 > 這是一般說明。
 
 > [!TIP]
-> 檔案存檔後頁面會自動重新整理。
+> 圖片等相對路徑資源會自動改寫成絕對 `file://` 連結，放在哪裡都能正確載入。
 
 > [!WARNING]
 > MathJax、Mermaid 與 highlight.js 都打包在 binary 裡，完全離線可用。
 
 > [!CAUTION]
-> 不要在公開網路介面上跑（伺服器只綁 127.0.0.1）。
+> 產出的 HTML 放在系統暫存目錄；重開同一份文件會覆蓋舊的渲染結果。
 
 ## 註腳與定義清單
 
